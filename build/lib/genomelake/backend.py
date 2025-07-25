@@ -1,32 +1,42 @@
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import json
 import numpy as np
 import os
 import six
 
-import zarr  # still used for loading legacy bcolz-format data via zarr.open
+import zarr
 from pybedtools import BedTool
 import pyBigWig
 from pysam import FastaFile
 
-from .util import makedirs, one_hot_encode_sequence, nan_to_zero
-from .tiledb_array import write_tiledb, load_tiledb
+from .util import makedirs
+from .util import one_hot_encode_sequence
+from .util import nan_to_zero
+from .tiledb_array import write_tiledb
+from .tiledb_array import load_tiledb
 
 NUM_SEQ_CHARS = 4
 
+_blosc_params = bcolz.cparams(clevel=5, shuffle=bcolz.SHUFFLE, cname="lz4")
+
 _array_writer = {
     "numpy": lambda arr, path: np.save(path, arr),
+    "bcolz": lambda arr, path: bcolz.carray(
+        arr, rootdir=path, cparams=_blosc_params, mode="w"
+    ).flush(),
     "tiledb": write_tiledb,
 }
 
 
-def extract_fasta_to_file(fasta, output_dir, mode="numpy", overwrite=False):
+def extract_fasta_to_file(fasta, output_dir, mode="bcolz", overwrite=False):
     assert mode in _array_writer
+
     makedirs(output_dir, exist_ok=overwrite)
     fasta_file = FastaFile(fasta)
     file_shapes = {}
-
     for chrom, size in zip(fasta_file.references, fasta_file.lengths):
         data = np.zeros((size, NUM_SEQ_CHARS), dtype=np.float32)
         seq = fasta_file.fetch(chrom)
@@ -35,22 +45,30 @@ def extract_fasta_to_file(fasta, output_dir, mode="numpy", overwrite=False):
         _array_writer[mode](data, os.path.join(output_dir, chrom))
 
     with open(os.path.join(output_dir, "metadata.json"), "w") as fp:
-        json.dump({
-            "file_shapes": file_shapes,
-            "type": "array_{}".format(mode),
-            "source": fasta,
-        }, fp)
+        json.dump(
+            {
+                "file_shapes": file_shapes,
+                "type": "array_{}".format(mode),
+                "source": fasta,
+            },
+            fp,
+        )
 
 
 def extract_bigwig_to_file(
-    bigwig, output_dir, mode="numpy", dtype=np.float32, overwrite=False, nan_as_zero=True,
+    bigwig,
+    output_dir,
+    mode="bcolz",
+    dtype=np.float32,
+    overwrite=False,
+    nan_as_zero=True,
 ):
     assert mode in _array_writer
+
     makedirs(output_dir, exist_ok=overwrite)
     bw = pyBigWig.open(bigwig)
     chrom_sizes = bw.chroms()
     file_shapes = {}
-
     for chrom, size in six.iteritems(chrom_sizes):
         data = np.zeros(size, dtype=np.float32)
         data[:] = bw.values(chrom, 0, size)
@@ -58,15 +76,17 @@ def extract_bigwig_to_file(
             nan_to_zero(data)
         _array_writer[mode](data.astype(dtype), os.path.join(output_dir, chrom))
         file_shapes[chrom] = data.shape
-
     bw.close()
 
     with open(os.path.join(output_dir, "metadata.json"), "w") as fp:
-        json.dump({
-            "file_shapes": file_shapes,
-            "type": "array_{}".format(mode),
-            "source": bigwig,
-        }, fp)
+        json.dump(
+            {
+                "file_shapes": file_shapes,
+                "type": "array_{}".format(mode),
+                "source": bigwig,
+            },
+            fp,
+        )
 
 
 def read_genome_sizes(genome_file):
@@ -92,13 +112,12 @@ def load_directory(base_dir, in_memory=False):
         }
 
     elif metadata["type"] == "array_bcolz":
-        # legacy fallback to zarr for reading existing bcolz-formatted data
         data = {
             chrom: zarr.open(os.path.join(base_dir, chrom), mode="r")
             for chrom in metadata["file_shapes"]
         }
         if in_memory:
-            data = {k: data[k][...] for k in data.keys()}
+            data = {k: data[k].copy() for k in data.keys()}
 
     elif metadata["type"] == "array_tiledb":
         data = {
@@ -107,7 +126,7 @@ def load_directory(base_dir, in_memory=False):
         }
 
     else:
-        raise ValueError("Unsupported array type: {}".format(metadata["type"]))
+        raise ValueError("Can only extract from array_bcolz and array_numpy")
 
     for chrom, shape in six.iteritems(metadata["file_shapes"]):
         if data[chrom].shape != tuple(shape):
@@ -117,4 +136,3 @@ def load_directory(base_dir, in_memory=False):
             )
 
     return data
-

@@ -1,0 +1,20 @@
+Metadata-Version: 2.4
+Name: genomelake
+Version: 0.1.0
+Summary: Genomic data access from .hdf5 or .bigwig
+Author: Avanti Shrikumar, Kundaje lab
+Author-email: avanti@stanford.edu
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: numpy>=1.18.0
+Requires-Dist: h5py
+Requires-Dist: scikit-learn
+Requires-Dist: pyfaidx
+Requires-Dist: pyBigWig
+Requires-Dist: zarr
+Dynamic: author
+Dynamic: author-email
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

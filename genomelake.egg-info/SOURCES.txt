@@ -1,0 +1,16 @@
+LICENSE
+MANIFEST.in
+README.md
+setup.cfg
+setup.py
+genomelake/__init__.py
+genomelake/backend.py
+genomelake/extractors.py
+genomelake/tiledb_array.py
+genomelake/util.pyx
+genomelake.egg-info/PKG-INFO
+genomelake.egg-info/SOURCES.txt
+genomelake.egg-info/dependency_links.txt
+genomelake.egg-info/requires.txt
+genomelake.egg-info/top_level.txt
+tests/test_extractors.py

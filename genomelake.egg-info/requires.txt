@@ -1,0 +1,6 @@
+numpy>=1.18.0
+h5py
+scikit-learn
+pyfaidx
+pyBigWig
+zarr
